@@ -1,0 +1,21 @@
+entryp Main main
+
+program Main {
+    function hello() {
+        print("MUKSZIK");
+    }
+    function main() {
+        set int x = 42;
+
+        print(x);
+        print("a szam: " + x);
+        if (x == 43) {
+            hello();
+            print("NEMJO");
+        } else {
+            hello();
+            print(" ");
+            print("JO");
+        }
+    }
+}
