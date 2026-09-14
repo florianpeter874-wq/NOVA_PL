@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,13 +7,18 @@
 #include "../include/parser.h"
 #include "../include/compiler.h"
 
-static char *read_file(const char *filename)
+static char *read_file(
+    const char *filename
+)
 {
     FILE *file;
     long size;
     char *buffer;
 
-    file = fopen(filename, "rb");
+    file = fopen(
+        filename,
+        "rb"
+    );
 
     if (file == NULL) {
         fprintf(
@@ -20,10 +26,15 @@ static char *read_file(const char *filename)
             "NOVA error: cannot open '%s'.\n",
             filename
         );
+
         return NULL;
     }
 
-    fseek(file, 0, SEEK_END);
+    fseek(
+        file,
+        0,
+        SEEK_END
+    );
 
     size = ftell(file);
 
@@ -32,9 +43,15 @@ static char *read_file(const char *filename)
         return NULL;
     }
 
-    fseek(file, 0, SEEK_SET);
+    fseek(
+        file,
+        0,
+        SEEK_SET
+    );
 
-    buffer = malloc((size_t)size + 1);
+    buffer = malloc(
+        (size_t)size + 1
+    );
 
     if (buffer == NULL) {
         fclose(file);
@@ -47,7 +64,13 @@ static char *read_file(const char *filename)
         return NULL;
     }
 
-    if (fread(buffer, 1, (size_t)size, file) != (size_t)size) {
+    if (fread(
+            buffer,
+            1,
+            (size_t)size,
+            file
+        ) != (size_t)size) {
+
         free(buffer);
         fclose(file);
 
@@ -67,17 +90,37 @@ static char *read_file(const char *filename)
     return buffer;
 }
 
-static void print_usage(const char *program)
+static void print_usage(
+    const char *program
+)
 {
     printf(
         "NOVA compiler\n\n"
         "Usage:\n"
-        "  %s <input.nova> -o <output.exe>\n",
+        "  %s <input.nova> -o <output.exe>\n"
+        "  %s <input.nova> -o <output.exe> --debug\n"
+        "  %s -v\n"
+        "  %s --version\n",
+        program,
+        program,
+        program,
         program
     );
 }
 
-int main(int argc, char **argv)
+static void print_version(void)
+{
+    printf(
+        "Nova 1.1\n"
+        "the children of the Nova project.\n"
+        "Built by Netfloor Software Corporation\n"
+    );
+}
+
+int main(
+    int argc,
+    char **argv
+)
 {
     const char *input_file;
     const char *output_file;
@@ -90,21 +133,79 @@ int main(int argc, char **argv)
     ASTNode *root;
 
     int result;
+    int debug;
+
+    int i;
 
     input_file = NULL;
     output_file = NULL;
+    debug = 0;
 
     if (argc < 2) {
         print_usage(argv[0]);
         return 1;
     }
 
-    input_file = argv[1];
+    for (i = 1; i < argc; i++) {
+        if (strcmp(
+                argv[i],
+                "-v"
+            ) == 0 ||
+            strcmp(
+                argv[i],
+                "--version"
+            ) == 0) {
 
-    if (argc >= 4 &&
-        strcmp(argv[2], "-o") == 0) {
+            print_version();
+            return 0;
+        }
 
-        output_file = argv[3];
+        if (strcmp(
+                argv[i],
+                "--debug"
+            ) == 0) {
+
+            debug = 1;
+            continue;
+        }
+
+        if (input_file == NULL) {
+            input_file = argv[i];
+            continue;
+        }
+
+        if (strcmp(
+                argv[i],
+                "-o"
+            ) == 0) {
+
+            if (i + 1 >= argc) {
+                fprintf(
+                    stderr,
+                    "NOVA error: output file is required after -o.\n"
+                );
+
+                return 1;
+            }
+
+            output_file = argv[i + 1];
+            i++;
+
+            continue;
+        }
+
+        fprintf(
+            stderr,
+            "NOVA error: unknown argument '%s'.\n",
+            argv[i]
+        );
+
+        return 1;
+    }
+
+    if (input_file == NULL) {
+        print_usage(argv[0]);
+        return 1;
     }
 
     if (output_file == NULL) {
@@ -118,7 +219,9 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    source = read_file(input_file);
+    source = read_file(
+        input_file
+    );
 
     if (source == NULL) {
         return 1;
@@ -168,7 +271,8 @@ int main(int argc, char **argv)
 
     result = compiler_compile(
         root,
-        output_file
+        output_file,
+        debug
     );
 
     ast_free(root);
@@ -196,3 +300,4 @@ int main(int argc, char **argv)
 
     return 0;
 }
+
