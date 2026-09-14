@@ -3,32 +3,42 @@
 
 #include "../include/ast.h"
 
-static char *copy_string(const char *text)
+ASTNode *ast_create(
+    ASTNodeType type,
+    const char *value
+)
 {
-    if (text == NULL)
+    ASTNode *node;
+
+    node = malloc(sizeof(ASTNode));
+
+    if (node == NULL) {
         return NULL;
-
-    size_t length = strlen(text);
-
-    char *result = malloc(length + 1);
-
-    if (result == NULL)
-        return NULL;
-
-    memcpy(result, text, length + 1);
-
-    return result;
-}
-
-ASTNode *ast_create(ASTNodeType type, const char *value)
-{
-    ASTNode *node = malloc(sizeof(ASTNode));
-
-    if (node == NULL)
-        return NULL;
+    }
 
     node->type = type;
-    node->value = copy_string(value);
+
+    node->data_type = NOVA_TYPE_INT;
+
+    node->is_array = 0;
+
+    node->value = NULL;
+
+    if (value != NULL) {
+        node->value = malloc(
+            strlen(value) + 1
+        );
+
+        if (node->value == NULL) {
+            free(node);
+            return NULL;
+        }
+
+        strcpy(
+            node->value,
+            value
+        );
+    }
 
     node->children = NULL;
     node->child_count = 0;
@@ -36,33 +46,58 @@ ASTNode *ast_create(ASTNodeType type, const char *value)
     return node;
 }
 
-void ast_add_child(ASTNode *parent, ASTNode *child)
+void ast_add_child(
+    ASTNode *parent,
+    ASTNode *child
+)
 {
-    if (parent == NULL || child == NULL)
-        return;
+    ASTNode **new_children;
 
-    ASTNode **new_children =
-        realloc(
-            parent->children,
-            sizeof(ASTNode *) * (parent->child_count + 1)
-        );
-
-    if (new_children == NULL)
+    if (
+        parent == NULL ||
+        child == NULL
+    ) {
         return;
+    }
+
+    new_children = realloc(
+        parent->children,
+        sizeof(ASTNode *) *
+        (parent->child_count + 1)
+    );
+
+    if (new_children == NULL) {
+        return;
+    }
 
     parent->children = new_children;
 
-    parent->children[parent->child_count] = child;
+    parent->children[
+        parent->child_count
+    ] = child;
+
     parent->child_count++;
 }
 
-void ast_free(ASTNode *node)
+void ast_free(
+    ASTNode *node
+)
 {
-    if (node == NULL)
-        return;
+    int i;
 
-    for (int i = 0; i < node->child_count; i++)
-        ast_free(node->children[i]);
+    if (node == NULL) {
+        return;
+    }
+
+    for (
+        i = 0;
+        i < node->child_count;
+        i++
+    ) {
+        ast_free(
+            node->children[i]
+        );
+    }
 
     free(node->children);
     free(node->value);
