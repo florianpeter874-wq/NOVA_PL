@@ -53,18 +53,282 @@ static int consume(TokenType type)
 static ASTNode *parse_statement(void);
 static ASTNode *parse_block(void);
 static ASTNode *parse_if(void);
+static ASTNode *parse_while(void);
+
 static ASTNode *parse_expression(void);
+static ASTNode *parse_logical_or(void);
+static ASTNode *parse_logical_and(void);
+static ASTNode *parse_comparison(void);
+static ASTNode *parse_addition(void);
+static ASTNode *parse_multiplication(void);
+static ASTNode *parse_unary(void);
 static ASTNode *parse_primary(void);
+
 static ASTNode *parse_function(void);
 static ASTNode *parse_entry_point(void);
 static ASTNode *parse_program(void);
 static ASTNode *parse_call(void);
 static ASTNode *parse_variable_decl(void);
+static ASTNode *parse_assignment(void);
 static ASTNode *parse_print(void);
+static ASTNode *parse_return(void);
+
+static ASTNode *create_binary(
+    const char *operator,
+    ASTNode *left,
+    ASTNode *right
+)
+{
+    ASTNode *binary;
+
+    binary = ast_create(
+        AST_BINARY,
+        operator
+    );
+
+    if (binary == NULL) {
+        ast_free(left);
+        ast_free(right);
+        return NULL;
+    }
+
+    ast_add_child(
+        binary,
+        left
+    );
+
+    ast_add_child(
+        binary,
+        right
+    );
+
+    return binary;
+}
+
+static ASTNode *parse_call(void)
+{
+    ASTNode *call;
+    ASTNode *argument;
+
+    Token *token;
+    Token *member_token;
+
+    char call_name[512];
+
+    /*
+     * Normal function:
+     *
+     * hello(...)
+     *
+     * Qualified function:
+     *
+     * file.open(...)
+     *
+     * Built-in:
+     *
+     * tostr(...)
+     */
+
+    if (
+        !check(TOKEN_IDENTIFIER) &&
+        !check(TOKEN_FILE) &&
+        !check(TOKEN_TOSTR)
+    ) {
+        return NULL;
+    }
+
+    token = current_token();
+
+    /*
+     * Built-in tostr(...)
+     */
+
+    if (check(TOKEN_TOSTR)) {
+
+        call = ast_create(
+            AST_CALL,
+            "tostr"
+        );
+
+        if (call == NULL) {
+            return NULL;
+        }
+
+        call->data_type =
+            NOVA_TYPE_STR;
+
+        advance_token();
+    }
+
+    /*
+     * Qualified function:
+     *
+     * file.open(...)
+     * file.read(...)
+     * file.write(...)
+     * file.close(...)
+     */
+
+    else if (
+        parser.current + 2 < parser.token_count &&
+        parser.tokens[
+            parser.current + 1
+        ].type == TOKEN_DOT &&
+        parser.tokens[
+            parser.current + 2
+        ].type == TOKEN_IDENTIFIER
+    ) {
+        member_token = &parser.tokens[
+            parser.current + 2
+        ];
+
+        if (
+            token->value == NULL ||
+            member_token->value == NULL
+        ) {
+            return NULL;
+        }
+
+        snprintf(
+            call_name,
+            sizeof(call_name),
+            "%s.%s",
+            token->value,
+            member_token->value
+        );
+
+        call = ast_create(
+            AST_CALL,
+            call_name
+        );
+
+        if (call == NULL) {
+            return NULL;
+        }
+
+        /*
+         * Return types of built-in file functions.
+         */
+
+        if (
+            strcmp(
+                call_name,
+                "file.open"
+            ) == 0
+        ) {
+            call->data_type =
+                NOVA_TYPE_FILE;
+        }
+        else if (
+            strcmp(
+                call_name,
+                "file.read"
+            ) == 0
+        ) {
+            call->data_type =
+                NOVA_TYPE_STR;
+        }
+        else if (
+            strcmp(
+                call_name,
+                "file.write"
+            ) == 0
+        ) {
+            call->data_type =
+                NOVA_TYPE_VOID;
+        }
+        else if (
+            strcmp(
+                call_name,
+                "file.close"
+            ) == 0
+        ) {
+            call->data_type =
+                NOVA_TYPE_VOID;
+        }
+
+        advance_token();
+        advance_token();
+        advance_token();
+    }
+
+    /*
+     * Normal function call.
+     */
+
+    else {
+
+        if (!check(TOKEN_IDENTIFIER)) {
+            return NULL;
+        }
+
+        call = ast_create(
+            AST_CALL,
+            token->value
+        );
+
+        if (call == NULL) {
+            return NULL;
+        }
+
+        advance_token();
+    }
+
+    if (!consume(TOKEN_LPAREN)) {
+        ast_free(call);
+        return NULL;
+    }
+
+    /*
+     * Arguments:
+     *
+     * hello("NOVA")
+     * add(10, 20)
+     * file.write(f, "Hello")
+     * tostr(x)
+     */
+
+    if (!check(TOKEN_RPAREN)) {
+
+        while (1) {
+
+            argument = parse_expression();
+
+            if (argument == NULL) {
+                ast_free(call);
+                return NULL;
+            }
+
+            ast_add_child(
+                call,
+                argument
+            );
+
+            if (consume(TOKEN_COMMA)) {
+                continue;
+            }
+
+            break;
+        }
+    }
+
+    if (!consume(TOKEN_RPAREN)) {
+        ast_free(call);
+        return NULL;
+    }
+
+    /*
+     * parse_call() does NOT consume ';'.
+     */
+
+    return call;
+}
 
 static ASTNode *parse_primary(void)
 {
     ASTNode *node;
+    ASTNode *index_node;
+
     Token *token;
 
     token = current_token();
@@ -73,7 +337,12 @@ static ASTNode *parse_primary(void)
         return NULL;
     }
 
+    /*
+     * Number.
+     */
+
     if (check(TOKEN_NUMBER)) {
+
         node = ast_create(
             AST_NUMBER,
             token->value
@@ -88,7 +357,12 @@ static ASTNode *parse_primary(void)
         return node;
     }
 
+    /*
+     * String.
+     */
+
     if (check(TOKEN_STRING)) {
+
         node = ast_create(
             AST_STRING,
             token->value
@@ -103,7 +377,102 @@ static ASTNode *parse_primary(void)
         return node;
     }
 
-    if (check(TOKEN_IDENTIFIER)) {
+    /*
+     * input()
+     */
+
+    if (check(TOKEN_INPUT)) {
+
+        advance_token();
+
+        if (!consume(TOKEN_LPAREN)) {
+            return NULL;
+        }
+
+        if (!consume(TOKEN_RPAREN)) {
+            return NULL;
+        }
+
+        node = ast_create(
+            AST_INPUT,
+            NULL
+        );
+
+        if (node == NULL) {
+            return NULL;
+        }
+
+        return node;
+    }
+
+    /*
+     * Identifier, TOKEN_FILE, or TOKEN_TOSTR.
+     */
+
+    if (
+        check(TOKEN_IDENTIFIER) ||
+        check(TOKEN_FILE) ||
+        check(TOKEN_TOSTR)
+    ) {
+
+        /*
+         * tostr(...)
+         */
+
+        if (check(TOKEN_TOSTR)) {
+            return parse_call();
+        }
+
+        /*
+         * Normal function:
+         *
+         * hello(...)
+         */
+
+        if (
+            check(TOKEN_IDENTIFIER) &&
+            parser.current + 1 < parser.token_count &&
+            parser.tokens[
+                parser.current + 1
+            ].type == TOKEN_LPAREN
+        ) {
+            return parse_call();
+        }
+
+        /*
+         * Qualified function:
+         *
+         * file.open(...)
+         * file.read(...)
+         * file.write(...)
+         * file.close(...)
+         */
+
+        if (
+            parser.current + 2 < parser.token_count &&
+            parser.tokens[
+                parser.current + 1
+            ].type == TOKEN_DOT &&
+            parser.tokens[
+                parser.current + 2
+            ].type == TOKEN_IDENTIFIER
+        ) {
+            return parse_call();
+        }
+
+        /*
+         * TOKEN_FILE by itself cannot
+         * be a variable reference.
+         */
+
+        if (check(TOKEN_FILE)) {
+            return NULL;
+        }
+
+        /*
+         * Variable reference.
+         */
+
         node = ast_create(
             AST_VARIABLE_REF,
             token->value
@@ -115,10 +484,42 @@ static ASTNode *parse_primary(void)
 
         advance_token();
 
+        /*
+         * Array access:
+         *
+         * numbers[0]
+         */
+
+        if (consume(TOKEN_LBRACKET)) {
+
+            index_node = parse_expression();
+
+            if (index_node == NULL) {
+                ast_free(node);
+                return NULL;
+            }
+
+            if (!consume(TOKEN_RBRACKET)) {
+                ast_free(index_node);
+                ast_free(node);
+                return NULL;
+            }
+
+            ast_add_child(
+                node,
+                index_node
+            );
+        }
+
         return node;
     }
 
+    /*
+     * Parenthesized expression.
+     */
+
     if (check(TOKEN_LPAREN)) {
+
         advance_token();
 
         node = parse_expression();
@@ -138,148 +539,296 @@ static ASTNode *parse_primary(void)
     return NULL;
 }
 
-static ASTNode *parse_expression(void)
+static ASTNode *parse_unary(void)
+{
+    ASTNode *operand;
+    ASTNode *unary;
+
+    if (check(TOKEN_NOT)) {
+
+        advance_token();
+
+        operand = parse_unary();
+
+        if (operand == NULL) {
+            return NULL;
+        }
+
+        unary = ast_create(
+            AST_UNARY,
+            "!"
+        );
+
+        if (unary == NULL) {
+            ast_free(operand);
+            return NULL;
+        }
+
+        ast_add_child(
+            unary,
+            operand
+        );
+
+        return unary;
+    }
+
+    return parse_primary();
+}
+
+static ASTNode *parse_multiplication(void)
 {
     ASTNode *left;
     ASTNode *right;
     ASTNode *binary;
 
-    Token *token;
-    TokenType operator_type;
+    const char *operator;
 
-    left = parse_primary();
+    left = parse_unary();
 
     if (left == NULL) {
         return NULL;
     }
 
-    token = current_token();
+    while (
+        check(TOKEN_STAR) ||
+        check(TOKEN_SLASH) ||
+        check(TOKEN_PERCENT)
+    ) {
 
-    if (token == NULL) {
-        return left;
-    }
+        if (check(TOKEN_STAR)) {
+            operator = "*";
+        }
+        else if (check(TOKEN_SLASH)) {
+            operator = "/";
+        }
+        else {
+            operator = "%";
+        }
 
-    operator_type = token->type;
-
-    if (operator_type == TOKEN_PLUS) {
         advance_token();
 
-        right = parse_primary();
+        right = parse_unary();
 
         if (right == NULL) {
             ast_free(left);
             return NULL;
         }
 
-        binary = ast_create(
-            AST_BINARY,
-            "+"
-        );
-
-        if (binary == NULL) {
-            ast_free(left);
-            ast_free(right);
-            return NULL;
-        }
-
-        ast_add_child(
-            binary,
-            left
-        );
-
-        ast_add_child(
-            binary,
+        binary = create_binary(
+            operator,
+            left,
             right
         );
 
-        return binary;
-    }
-
-    if (operator_type == TOKEN_EQUAL_EQUAL ||
-        operator_type == TOKEN_NOT_EQUAL ||
-        operator_type == TOKEN_LESS ||
-        operator_type == TOKEN_LESS_EQUAL ||
-        operator_type == TOKEN_GREATER ||
-        operator_type == TOKEN_GREATER_EQUAL) {
-
-        advance_token();
-
-        right = parse_primary();
-
-        if (right == NULL) {
-            ast_free(left);
-            return NULL;
-        }
-
-        switch (operator_type) {
-            case TOKEN_EQUAL_EQUAL:
-                binary = ast_create(
-                    AST_BINARY,
-                    "=="
-                );
-                break;
-
-            case TOKEN_NOT_EQUAL:
-                binary = ast_create(
-                    AST_BINARY,
-                    "!="
-                );
-                break;
-
-            case TOKEN_LESS:
-                binary = ast_create(
-                    AST_BINARY,
-                    "<"
-                );
-                break;
-
-            case TOKEN_LESS_EQUAL:
-                binary = ast_create(
-                    AST_BINARY,
-                    "<="
-                );
-                break;
-
-            case TOKEN_GREATER:
-                binary = ast_create(
-                    AST_BINARY,
-                    ">"
-                );
-                break;
-
-            case TOKEN_GREATER_EQUAL:
-                binary = ast_create(
-                    AST_BINARY,
-                    ">="
-                );
-                break;
-
-            default:
-                ast_free(left);
-                ast_free(right);
-                return NULL;
-        }
-
         if (binary == NULL) {
-            ast_free(left);
-            ast_free(right);
             return NULL;
         }
 
-        ast_add_child(
-            binary,
-            left
-        );
-
-        ast_add_child(
-            binary,
-            right
-        );
-
-        return binary;
+        left = binary;
     }
 
     return left;
+}
+
+static ASTNode *parse_addition(void)
+{
+    ASTNode *left;
+    ASTNode *right;
+    ASTNode *binary;
+
+    const char *operator;
+
+    left = parse_multiplication();
+
+    if (left == NULL) {
+        return NULL;
+    }
+
+    while (
+        check(TOKEN_PLUS) ||
+        check(TOKEN_MINUS)
+    ) {
+
+        if (check(TOKEN_PLUS)) {
+            operator = "+";
+        }
+        else {
+            operator = "-";
+        }
+
+        advance_token();
+
+        right = parse_multiplication();
+
+        if (right == NULL) {
+            ast_free(left);
+            return NULL;
+        }
+
+        binary = create_binary(
+            operator,
+            left,
+            right
+        );
+
+        if (binary == NULL) {
+            return NULL;
+        }
+
+        left = binary;
+    }
+
+    return left;
+}
+
+static ASTNode *parse_comparison(void)
+{
+    ASTNode *left;
+    ASTNode *right;
+    ASTNode *binary;
+
+    const char *operator;
+
+    left = parse_addition();
+
+    if (left == NULL) {
+        return NULL;
+    }
+
+    while (
+        check(TOKEN_EQUAL_EQUAL) ||
+        check(TOKEN_NOT_EQUAL) ||
+        check(TOKEN_LESS) ||
+        check(TOKEN_LESS_EQUAL) ||
+        check(TOKEN_GREATER) ||
+        check(TOKEN_GREATER_EQUAL)
+    ) {
+
+        if (check(TOKEN_EQUAL_EQUAL)) {
+            operator = "==";
+        }
+        else if (check(TOKEN_NOT_EQUAL)) {
+            operator = "!=";
+        }
+        else if (check(TOKEN_LESS)) {
+            operator = "<";
+        }
+        else if (check(TOKEN_LESS_EQUAL)) {
+            operator = "<=";
+        }
+        else if (check(TOKEN_GREATER)) {
+            operator = ">";
+        }
+        else {
+            operator = ">=";
+        }
+
+        advance_token();
+
+        right = parse_addition();
+
+        if (right == NULL) {
+            ast_free(left);
+            return NULL;
+        }
+
+        binary = create_binary(
+            operator,
+            left,
+            right
+        );
+
+        if (binary == NULL) {
+            return NULL;
+        }
+
+        left = binary;
+    }
+
+    return left;
+}
+
+static ASTNode *parse_logical_and(void)
+{
+    ASTNode *left;
+    ASTNode *right;
+    ASTNode *binary;
+
+    left = parse_comparison();
+
+    if (left == NULL) {
+        return NULL;
+    }
+
+    while (check(TOKEN_AND_AND)) {
+
+        advance_token();
+
+        right = parse_comparison();
+
+        if (right == NULL) {
+            ast_free(left);
+            return NULL;
+        }
+
+        binary = create_binary(
+            "&&",
+            left,
+            right
+        );
+
+        if (binary == NULL) {
+            return NULL;
+        }
+
+        left = binary;
+    }
+
+    return left;
+}
+
+static ASTNode *parse_logical_or(void)
+{
+    ASTNode *left;
+    ASTNode *right;
+    ASTNode *binary;
+
+    left = parse_logical_and();
+
+    if (left == NULL) {
+        return NULL;
+    }
+
+    while (check(TOKEN_OR_OR)) {
+
+        advance_token();
+
+        right = parse_logical_and();
+
+        if (right == NULL) {
+            ast_free(left);
+            return NULL;
+        }
+
+        binary = create_binary(
+            "||",
+            left,
+            right
+        );
+
+        if (binary == NULL) {
+            return NULL;
+        }
+
+        left = binary;
+    }
+
+    return left;
+}
+
+static ASTNode *parse_expression(void)
+{
+    return parse_logical_or();
 }
 
 static ASTNode *parse_print(void)
@@ -295,9 +844,13 @@ static ASTNode *parse_print(void)
 
     token = current_token();
 
-    if (token->value == NULL ||
-        strcmp(token->value, "print") != 0) {
-
+    if (
+        token->value == NULL ||
+        strcmp(
+            token->value,
+            "print"
+        ) != 0
+    ) {
         return NULL;
     }
 
@@ -341,20 +894,187 @@ static ASTNode *parse_print(void)
     return print_node;
 }
 
+static ASTNode *parse_return(void)
+{
+    ASTNode *return_node;
+    ASTNode *expression;
+
+    if (!consume(TOKEN_RET)) {
+        return NULL;
+    }
+
+    expression = parse_expression();
+
+    if (expression == NULL) {
+        return NULL;
+    }
+
+    if (!consume(TOKEN_SEMICOLON)) {
+        ast_free(expression);
+        return NULL;
+    }
+
+    return_node = ast_create(
+        AST_RETURN,
+        NULL
+    );
+
+    if (return_node == NULL) {
+        ast_free(expression);
+        return NULL;
+    }
+
+    ast_add_child(
+        return_node,
+        expression
+    );
+
+    return return_node;
+}
+
 static ASTNode *parse_variable_decl(void)
 {
-    ASTNode *variable;
+    ASTNode *node;
+    ASTNode *size_node;
+    ASTNode *expression;
+
+    Token *name_token;
+    Token *type_token;
+
+    if (!check(TOKEN_SET)) {
+        return NULL;
+    }
+
+    advance_token();
+
+    type_token = current_token();
+
+    if (
+        type_token == NULL ||
+        (
+            type_token->type != TOKEN_INT &&
+            type_token->type != TOKEN_STR &&
+            type_token->type != TOKEN_FILE
+        )
+    ) {
+        return NULL;
+    }
+
+    advance_token();
+
+    name_token = current_token();
+
+    if (
+        name_token == NULL ||
+        name_token->type != TOKEN_IDENTIFIER
+    ) {
+        return NULL;
+    }
+
+    advance_token();
+
+    node = ast_create(
+        AST_VARIABLE_DECL,
+        name_token->value
+    );
+
+    if (node == NULL) {
+        return NULL;
+    }
+
+    if (
+        type_token->type ==
+        TOKEN_STR
+    ) {
+        node->data_type =
+            NOVA_TYPE_STR;
+    }
+    else if (
+        type_token->type ==
+        TOKEN_FILE
+    ) {
+        node->data_type =
+            NOVA_TYPE_FILE;
+    }
+    else {
+        node->data_type =
+            NOVA_TYPE_INT;
+    }
+
+    /*
+     * Array declaration:
+     *
+     * set int numbers[5];
+     */
+
+    if (consume(TOKEN_LBRACKET)) {
+
+        size_node = parse_expression();
+
+        if (size_node == NULL) {
+            ast_free(node);
+            return NULL;
+        }
+
+        if (!consume(TOKEN_RBRACKET)) {
+            ast_free(size_node);
+            ast_free(node);
+            return NULL;
+        }
+
+        node->is_array = 1;
+
+        ast_add_child(
+            node,
+            size_node
+        );
+
+        if (!consume(TOKEN_SEMICOLON)) {
+            ast_free(node);
+            return NULL;
+        }
+
+        return node;
+    }
+
+    /*
+     * Normal variable:
+     *
+     * set int x = 5;
+     */
+
+    if (!consume(TOKEN_EQUAL)) {
+        ast_free(node);
+        return NULL;
+    }
+
+    expression = parse_expression();
+
+    if (expression == NULL) {
+        ast_free(node);
+        return NULL;
+    }
+
+    ast_add_child(
+        node,
+        expression
+    );
+
+    if (!consume(TOKEN_SEMICOLON)) {
+        ast_free(node);
+        return NULL;
+    }
+
+    return node;
+}
+
+static ASTNode *parse_assignment(void)
+{
+    ASTNode *assignment;
+    ASTNode *index_node;
     ASTNode *value_node;
 
     Token *name_token;
-
-    if (!consume(TOKEN_SET)) {
-        return NULL;
-    }
-
-    if (!consume(TOKEN_INT)) {
-        return NULL;
-    }
 
     if (!check(TOKEN_IDENTIFIER)) {
         return NULL;
@@ -364,37 +1084,65 @@ static ASTNode *parse_variable_decl(void)
 
     advance_token();
 
+    assignment = ast_create(
+        AST_ASSIGNMENT,
+        name_token->value
+    );
+
+    if (assignment == NULL) {
+        return NULL;
+    }
+
+    /*
+     * Array assignment:
+     *
+     * numbers[0] = 10;
+     */
+
+    if (consume(TOKEN_LBRACKET)) {
+
+        index_node = parse_expression();
+
+        if (index_node == NULL) {
+            ast_free(assignment);
+            return NULL;
+        }
+
+        if (!consume(TOKEN_RBRACKET)) {
+            ast_free(index_node);
+            ast_free(assignment);
+            return NULL;
+        }
+
+        ast_add_child(
+            assignment,
+            index_node
+        );
+    }
+
     if (!consume(TOKEN_EQUAL)) {
+        ast_free(assignment);
         return NULL;
     }
 
     value_node = parse_expression();
 
     if (value_node == NULL) {
-        return NULL;
-    }
-
-    if (!consume(TOKEN_SEMICOLON)) {
-        ast_free(value_node);
-        return NULL;
-    }
-
-    variable = ast_create(
-        AST_VARIABLE_DECL,
-        name_token->value
-    );
-
-    if (variable == NULL) {
-        ast_free(value_node);
+        ast_free(assignment);
         return NULL;
     }
 
     ast_add_child(
-        variable,
+        assignment,
         value_node
     );
 
-    return variable;
+    if (!consume(TOKEN_SEMICOLON)) {
+        ast_free(assignment);
+        return NULL;
+    }
+
+    return assignment;
 }
 
 static ASTNode *parse_if(void)
@@ -452,6 +1200,7 @@ static ASTNode *parse_if(void)
     );
 
     if (check(TOKEN_ELSE)) {
+
         advance_token();
 
         else_block = parse_block();
@@ -470,45 +1219,60 @@ static ASTNode *parse_if(void)
     return if_node;
 }
 
-static ASTNode *parse_call(void)
+static ASTNode *parse_while(void)
 {
-    ASTNode *call;
+    ASTNode *while_node;
+    ASTNode *condition;
+    ASTNode *body;
 
-    Token *token;
-
-    if (!check(TOKEN_IDENTIFIER)) {
+    if (!consume(TOKEN_WHILE)) {
         return NULL;
     }
-
-    token = current_token();
-
-    call = ast_create(
-        AST_CALL,
-        token->value
-    );
-
-    if (call == NULL) {
-        return NULL;
-    }
-
-    advance_token();
 
     if (!consume(TOKEN_LPAREN)) {
-        ast_free(call);
+        return NULL;
+    }
+
+    condition = parse_expression();
+
+    if (condition == NULL) {
         return NULL;
     }
 
     if (!consume(TOKEN_RPAREN)) {
-        ast_free(call);
+        ast_free(condition);
         return NULL;
     }
 
-    if (!consume(TOKEN_SEMICOLON)) {
-        ast_free(call);
+    body = parse_block();
+
+    if (body == NULL) {
+        ast_free(condition);
         return NULL;
     }
 
-    return call;
+    while_node = ast_create(
+        AST_WHILE,
+        NULL
+    );
+
+    if (while_node == NULL) {
+        ast_free(condition);
+        ast_free(body);
+        return NULL;
+    }
+
+    ast_add_child(
+        while_node,
+        condition
+    );
+
+    ast_add_child(
+        while_node,
+        body
+    );
+
+    return while_node;
 }
 
 static ASTNode *parse_statement(void)
@@ -525,18 +1289,91 @@ static ASTNode *parse_statement(void)
         return parse_variable_decl();
     }
 
+    if (check(TOKEN_RET)) {
+        return parse_return();
+    }
+
     if (check(TOKEN_IF)) {
         return parse_if();
     }
 
-    if (check(TOKEN_IDENTIFIER)) {
-        if (token->value != NULL &&
-            strcmp(token->value, "print") == 0) {
+    if (check(TOKEN_WHILE)) {
+        return parse_while();
+    }
 
+    /*
+     * Identifier, TOKEN_FILE, or TOKEN_TOSTR.
+     *
+     * print(...)
+     * greet(...)
+     * file.write(...)
+     * file.close(...)
+     * tostr(...)
+     */
+
+    if (
+        check(TOKEN_IDENTIFIER) ||
+        check(TOKEN_FILE) ||
+        check(TOKEN_TOSTR)
+    ) {
+
+        /*
+         * print(...)
+         */
+
+        if (
+            check(TOKEN_IDENTIFIER) &&
+            token->value != NULL &&
+            strcmp(
+                token->value,
+                "print"
+            ) == 0
+        ) {
             return parse_print();
         }
 
-        return parse_call();
+        /*
+         * Assignment.
+         *
+         * Only identifiers can be variables.
+         */
+
+        if (
+            check(TOKEN_IDENTIFIER) &&
+            parser.current + 1 < parser.token_count &&
+            (
+                parser.tokens[
+                    parser.current + 1
+                ].type == TOKEN_EQUAL ||
+
+                parser.tokens[
+                    parser.current + 1
+                ].type == TOKEN_LBRACKET
+            )
+        ) {
+            return parse_assignment();
+        }
+
+        /*
+         * Function call.
+         */
+
+        {
+            ASTNode *call;
+
+            call = parse_call();
+
+            if (call == NULL) {
+                return NULL;
+            }
+
+            if (!consume(TOKEN_SEMICOLON)) {
+                ast_free(call);
+                return NULL;
+            }
+
+            return call;
+        }
     }
 
     return NULL;
@@ -560,8 +1397,10 @@ static ASTNode *parse_block(void)
         return NULL;
     }
 
-    while (!check(TOKEN_RBRACE) &&
-           !check(TOKEN_EOF)) {
+    while (
+        !check(TOKEN_RBRACE) &&
+        !check(TOKEN_EOF)
+    ) {
 
         statement = parse_statement();
 
@@ -588,33 +1427,173 @@ static ASTNode *parse_function(void)
 {
     ASTNode *function;
     ASTNode *block;
+    ASTNode *parameter;
 
-    Token *token;
+    Token *name_token;
 
     if (!consume(TOKEN_FUNCTION)) {
         return NULL;
     }
 
-    if (!check(TOKEN_IDENTIFIER)) {
-        return NULL;
+    /*
+     * NOVA function return types:
+     *
+     * function main()
+     * function intret add()
+     * function strret hello()
+     */
+
+    if (
+        check(TOKEN_INTRET) ||
+        check(TOKEN_STRRET)
+    ) {
+        TokenType return_type;
+
+        return_type =
+            current_token()->type;
+
+        advance_token();
+
+        if (!check(TOKEN_IDENTIFIER)) {
+            return NULL;
+        }
+
+        name_token =
+            current_token();
+
+        function = ast_create(
+            AST_FUNCTION,
+            name_token->value
+        );
+
+        if (function == NULL) {
+            return NULL;
+        }
+
+        if (
+            return_type ==
+            TOKEN_INTRET
+        ) {
+            function->data_type =
+                NOVA_TYPE_INT;
+        }
+        else {
+            function->data_type =
+                NOVA_TYPE_STR;
+        }
+
+        advance_token();
     }
+    else {
 
-    token = current_token();
+        if (!check(TOKEN_IDENTIFIER)) {
+            return NULL;
+        }
 
-    function = ast_create(
-        AST_FUNCTION,
-        token->value
-    );
+        name_token =
+            current_token();
 
-    if (function == NULL) {
-        return NULL;
+        function = ast_create(
+            AST_FUNCTION,
+            name_token->value
+        );
+
+        if (function == NULL) {
+            return NULL;
+        }
+
+        function->data_type =
+            NOVA_TYPE_VOID;
+
+        advance_token();
     }
-
-    advance_token();
 
     if (!consume(TOKEN_LPAREN)) {
         ast_free(function);
         return NULL;
+    }
+
+    /*
+     * Function parameters.
+     */
+
+    if (!check(TOKEN_RPAREN)) {
+
+        while (1) {
+
+            Token *type_token;
+            Token *parameter_name;
+
+            type_token =
+                current_token();
+
+            if (
+                type_token == NULL ||
+                (
+                    type_token->type != TOKEN_INT &&
+                    type_token->type != TOKEN_STR &&
+                    type_token->type != TOKEN_FILE
+                )
+            ) {
+                ast_free(function);
+                return NULL;
+            }
+
+            advance_token();
+
+            parameter_name =
+                current_token();
+
+            if (
+                parameter_name == NULL ||
+                parameter_name->type != TOKEN_IDENTIFIER
+            ) {
+                ast_free(function);
+                return NULL;
+            }
+
+            parameter = ast_create(
+                AST_VARIABLE_DECL,
+                parameter_name->value
+            );
+
+            if (parameter == NULL) {
+                ast_free(function);
+                return NULL;
+            }
+
+            if (
+                type_token->type ==
+                TOKEN_INT
+            ) {
+                parameter->data_type =
+                    NOVA_TYPE_INT;
+            }
+            else if (
+                type_token->type ==
+                TOKEN_FILE
+            ) {
+                parameter->data_type =
+                    NOVA_TYPE_FILE;
+            }
+            else {
+                parameter->data_type =
+                    NOVA_TYPE_STR;
+            }
+
+            advance_token();
+
+            ast_add_child(
+                function,
+                parameter
+            );
+
+            if (consume(TOKEN_COMMA)) {
+                continue;
+            }
+
+            break;
+        }
     }
 
     if (!consume(TOKEN_RPAREN)) {
@@ -653,7 +1632,8 @@ static ASTNode *parse_entry_point(void)
         return NULL;
     }
 
-    program_name = current_token();
+    program_name =
+        current_token();
 
     advance_token();
 
@@ -661,7 +1641,8 @@ static ASTNode *parse_entry_point(void)
         return NULL;
     }
 
-    function_name = current_token();
+    function_name =
+        current_token();
 
     advance_token();
 
@@ -716,7 +1697,8 @@ static ASTNode *parse_program(void)
         return NULL;
     }
 
-    token = current_token();
+    token =
+        current_token();
 
     program = ast_create(
         AST_PROGRAM,
@@ -740,15 +1722,18 @@ static ASTNode *parse_program(void)
         return NULL;
     }
 
-    while (!check(TOKEN_RBRACE) &&
-           !check(TOKEN_EOF)) {
+    while (
+        !check(TOKEN_RBRACE) &&
+        !check(TOKEN_EOF)
+    ) {
 
         if (!check(TOKEN_FUNCTION)) {
             ast_free(program);
             return NULL;
         }
 
-        function = parse_function();
+        function =
+            parse_function();
 
         if (function == NULL) {
             ast_free(program);
@@ -781,17 +1766,24 @@ ASTNode *parser_parse(
 {
     ASTNode *root;
 
-    if (tokens == NULL ||
-        token_count <= 0) {
-
+    if (
+        tokens == NULL ||
+        token_count <= 0
+    ) {
         return NULL;
     }
 
-    parser.tokens = tokens;
-    parser.token_count = token_count;
-    parser.current = 0;
+    parser.tokens =
+        tokens;
 
-    root = parse_program();
+    parser.token_count =
+        token_count;
+
+    parser.current =
+        0;
+
+    root =
+        parse_program();
 
     return root;
 }
