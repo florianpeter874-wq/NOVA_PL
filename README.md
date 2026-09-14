@@ -1,14 +1,14 @@
 # NOVA
 
-**Nova 1.1**
-*the children of the Nova project.*
-**Built by Netfloor Software Corporation**
+## Nova 1.1
 
-NOVA is a standalone programming language designed to be simple, readable, and easy to compile.
+### the children of the Nova project.
 
-The NOVA compiler is written in **C** and currently generates C code, which is then compiled using **GCC**.
+### Built by Netfloor Software Corporation
 
-NOVA is an independent language project. It is not designed specifically for an operating system or for OOSB.
+NOVA is a standalone programming language designed to provide a simple, readable syntax while compiling programs to native C code.
+
+NOVA is **not tied to an operating system** and is designed as an independent programming language and compiler project.
 
 ---
 
@@ -16,100 +16,465 @@ NOVA is an independent language project. It is not designed specifically for an 
 
 NOVA currently supports:
 
-* Programs
-* Functions
-* Entry points
-* Variables
-* Integer values
-* Strings
-* `print()`
-* Function calls
+* `program`
+* `function`
+* `entryp`
+* `set`
+* `int`
+* `str`
+* `file`
 * `if / else`
+* `while`
+* `ret`
+* `input()`
+* Function parameters
+* Function calls
+* Integer expressions
+* String expressions
+* String + integer expressions
 * Comparisons
-* Arithmetic with `+`
-* Parenthesized expressions
-* String and integer output
-* C code generation
-* GCC compilation
-* Benchmarking
+* Logical operators
+* Arrays
+* File operations
+* Automatic C code generation
+* Native compilation through GCC
 
 ---
 
-## Example
+# Example
+
+A basic NOVA program:
 
 ```nova
 entryp Main main
 
 program Main {
-    function hello() {
-        print("Hello from NOVA!");
-    }
 
     function main() {
-        set int x = 42;
-
-        hello();
-
-        print(x);
-        print("The number is:" + x);
-
-        if (x == 42) {
-            print("YES!");
-        } else {
-            print("NO!");
-        }
+        print("Hello, NOVA!");
     }
+
 }
 ```
 
----
-
-## Compilation
-
-The NOVA compiler is built as:
-
-```text
-nova.exe
-```
-
-Compile a NOVA program with:
+Compile it:
 
 ```powershell
-.\nova.exe examples\hello.nova -o hello.exe
+nova.exe examples\hello.nova -o hello.exe
 ```
 
-Then run the generated program:
+Run it:
 
 ```powershell
 .\hello.exe
 ```
 
-The compilation pipeline is:
+Output:
 
 ```text
-NOVA source
-    ↓
-   Lexer
-    ↓
-  Parser
-    ↓
-    AST
-    ↓
- Compiler
-    ↓
-generated C
-    ↓
-   GCC
-    ↓
-  .exe
+Hello, NOVA!
 ```
 
 ---
 
-## Project Structure
+# Variables
+
+NOVA supports integer and string variables.
+
+## Integer
+
+```nova
+set int x = 42;
+
+print(x);
+```
+
+## String
+
+```nova
+set str name = "NOVA";
+
+print(name);
+```
+
+---
+
+# Input
+
+Input can be read using `input()`.
+
+```nova
+function main() {
+
+    set int number = input();
+
+    print(number);
+
+}
+```
+
+---
+
+# Arithmetic
+
+NOVA supports arithmetic operators:
+
+```text
++
+-
+*
+/
+%
+```
+
+Example:
+
+```nova
+set int x = 10;
+set int y = 5;
+
+print(x + y);
+print(x - y);
+print(x * y);
+print(x / y);
+print(x % y);
+```
+
+---
+
+# Comparisons
+
+NOVA supports:
+
+```text
+==
+!=
+<
+<=
+>
+>=
+```
+
+Example:
+
+```nova
+if (x == 42) {
+    print("The answer is 42!");
+}
+```
+
+---
+
+# Logical Operators
+
+NOVA supports:
+
+```text
+&&
+||
+!
+```
+
+Example:
+
+```nova
+if (x > 10 && x < 100) {
+    print("x is between 10 and 100");
+}
+```
+
+---
+
+# If / Else
+
+```nova
+if (x == 42) {
+
+    print("Correct!");
+
+} else {
+
+    print("Wrong!");
+
+}
+```
+
+---
+
+# While
+
+```nova
+set int x = 0;
+
+while (x < 10) {
+
+    print(x);
+
+    x = x + 1;
+
+}
+```
+
+---
+
+# Functions
+
+Functions can be declared using `function`.
+
+```nova
+function hello() {
+
+    print("Hello!");
+
+}
+```
+
+They can then be called:
+
+```nova
+function main() {
+
+    hello();
+
+}
+```
+
+---
+
+# Function Parameters
+
+Functions can accept parameters.
+
+```nova
+function greet(str name) {
+
+    print(name);
+
+}
+```
+
+Call the function:
+
+```nova
+greet("NOVA");
+```
+
+Multiple parameters are supported:
+
+```nova
+function intret add(int a, int b) {
+
+    ret a + b;
+
+}
+```
+
+---
+
+# Return Values
+
+NOVA supports return values using `ret`.
+
+## Integer return
+
+```nova
+function intret add(int a, int b) {
+
+    ret a + b;
+
+}
+```
+
+## String return
+
+```nova
+function strret hello() {
+
+    ret "Hello from NOVA!";
+
+}
+```
+
+A returned value can be used in an expression:
+
+```nova
+print(add(5, 7));
+```
+
+---
+
+# Arrays
+
+Arrays can be declared using:
+
+```nova
+set int numbers[5];
+```
+
+Array elements can be accessed using indexes:
+
+```nova
+numbers[0] = 10;
+numbers[1] = 20;
+
+print(numbers[0]);
+```
+
+---
+
+# File Operations
+
+NOVA provides file operations through the `file` type.
+
+Example:
+
+```nova
+function main() {
+
+    set file f = file.open("test.txt");
+
+    file.write(f, "Hello from NOVA!");
+
+    set str content = file.read(f);
+
+    print(content);
+
+    file.close(f);
+
+}
+```
+
+The available operations are:
+
+```text
+file.open()
+file.read()
+file.write()
+file.close()
+```
+
+### `file.open`
+
+Opens or creates a file.
+
+```nova
+set file f = file.open("test.txt");
+```
+
+### `file.write`
+
+Writes text to a file.
+
+```nova
+file.write(f, "Hello from NOVA!");
+```
+
+### `file.read`
+
+Reads the contents of a file.
+
+```nova
+set str content = file.read(f);
+```
+
+### `file.close`
+
+Closes the file.
+
+```nova
+file.close(f);
+```
+
+---
+
+# Program Structure
+
+A NOVA program uses an entry point and a program declaration.
+
+```nova
+entryp Main main
+
+program Main {
+
+    function main() {
+
+        print("Hello, NOVA!");
+
+    }
+
+}
+```
+
+The `entryp` declaration specifies the program entry point.
+
+---
+
+# Compiler Architecture
+
+NOVA follows a multi-stage compilation pipeline:
+
+```text
+NOVA source
+    |
+    v
+Lexer
+    |
+    v
+Tokens
+    |
+    v
+Parser
+    |
+    v
+AST
+    |
+    v
+Compiler
+    |
+    v
+Generated C
+    |
+    v
+GCC
+    |
+    v
+Native executable
+```
+
+In simplified form:
+
+```text
+hello.nova
+     |
+     v
+  lexer.c
+     |
+     v
+ parser.c
+     |
+     v
+   ast.c
+     |
+     v
+compiler.c
+     |
+     v
+generated.c
+     |
+     v
+    GCC
+     |
+     v
+ hello.exe
+```
+
+---
+
+# Project Structure
 
 ```text
 NOVA/
+│
 ├── src/
 │   ├── main.c
 │   ├── lexer.c
@@ -131,297 +496,149 @@ NOVA/
 │
 ├── benchmark/
 │   ├── run_benchmark.py
-│   └── run_benchmark.exe
+│   ├── build/
+│   └── tests/
 │
 └── README.md
 ```
 
 ---
 
-## Benchmark
+# Building NOVA
 
-NOVA includes a benchmark runner for testing the language and compiler.
+NOVA is written in C.
 
-The benchmark runner can be used directly as an executable:
+A C compiler such as GCC is required to build the NOVA compiler.
 
-```powershell
-.\benchmark\run_benchmark.exe
-```
-
-The original Python version is also included:
+On Windows with MinGW/MSYS2:
 
 ```powershell
-python benchmark\run_benchmark.py
+gcc src\main.c src\lexer.c src\parser.c src\ast.c src\compiler.c src\error.c -Iinclude -o nova.exe
 ```
 
-The benchmark is intended to test things such as:
+After compilation:
 
-* Numeric operations
-* Loops
-* Function calls
-* Recursion
-* Lists
-* Bitwise operations
-* Strings
-* File operations
-* Compilation time
-* Runtime
-* Memory usage
-* Compatibility
-
-The benchmark is useful for tracking NOVA's development over time.
-
----
-
-## Language Syntax
-
-### Entry Point
-
-```nova
-entryp Main main
-```
-
-This tells NOVA which function should be used as the program entry point.
-
----
-
-### Program
-
-```nova
-program Main {
-    ...
-}
-```
-
-A NOVA source file contains a program declaration.
-
----
-
-### Functions
-
-```nova
-function hello() {
-    print("Hello!");
-}
-```
-
-Functions can be called from other functions:
-
-```nova
-hello();
+```powershell
+.\nova.exe
 ```
 
 ---
 
-### Variables
+# Compiling a NOVA Program
 
-```nova
-set int x = 42;
-```
-
-Variables can then be used:
-
-```nova
-print(x);
-```
-
----
-
-### Conditions
-
-```nova
-if (x == 42) {
-    print("Correct!");
-} else {
-    print("Wrong!");
-}
-```
-
-Supported comparison operators include:
-
-```text
-==
-!=
-<
-<=
->
->=
-```
-
----
-
-### Arithmetic
-
-```nova
-print(5 + 10);
-```
-
-Variables can also be used:
-
-```nova
-set int x = 5;
-print(x + 10);
-```
-
----
-
-### Strings
-
-```nova
-print("Hello, NOVA!");
-```
-
-Escape sequences are supported:
-
-```text
-\n
-\t
-\r
-\\
-\"
-```
-
----
-
-### String + Integer
-
-NOVA can combine a string and an integer in `print()`:
-
-```nova
-set int x = 42;
-
-print("The answer is:" + x);
-```
-
-Output:
-
-```text
-The answer is:42
-```
-
----
-
-## Compiler Architecture
-
-NOVA is divided into several stages.
-
-### Lexer
-
-The lexer converts source code into tokens.
-
-```text
-Source
-  ↓
-Lexer
-  ↓
-Tokens
-```
-
-For example:
-
-```nova
-set int x = 42;
-```
-
-becomes approximately:
-
-```text
-SET
-INT
-IDENTIFIER
-EQUAL
-NUMBER
-SEMICOLON
-```
-
----
-
-### Parser
-
-The parser converts tokens into an Abstract Syntax Tree.
-
-```text
-Tokens
-  ↓
-Parser
-  ↓
-AST
-```
-
----
-
-### AST
-
-The AST represents the structure of the NOVA program.
-
-For example:
-
-```nova
-set int x = 42;
-```
-
-becomes approximately:
-
-```text
-VARIABLE_DECL
-├── x
-└── NUMBER
-    └── 42
-```
-
----
-
-### Compiler
-
-The compiler converts the AST into C code.
-
-For example:
-
-```nova
-print(x);
-```
-
-can become:
-
-```c
-printf("%d\n", x);
-```
-
-The generated C file is then compiled using GCC.
-
----
-
-## Requirements
-
-To build NOVA from source, you need:
-
-* A C compiler
-* GCC
-* Windows or another platform capable of running the compiler tools
-
-The current NOVA compiler uses GCC for the final executable generation.
-
----
-
-## Building NOVA
-
-Compile the compiler sources with GCC.
-
-The resulting executable should be:
-
-```text
-nova.exe
-```
-
-Then use:
+Once `nova.exe` has been built:
 
 ```powershell
 .\nova.exe examples\hello.nova -o hello.exe
 ```
 
+Then run:
+
+```powershell
+.\hello.exe
+```
+
 ---
 
-## Version
+# Windows
+
+The NOVA project is developed and tested on Windows.
+
+The project can be located anywhere, for example:
+
+```text
+W:\NOVA
+```
+
+A typical setup can look like:
+
+```text
+W:\NOVA\
+    nova.exe
+    README.md
+    examples\
+    benchmark\
+```
+
+The benchmark can use the NOVA compiler from the project directory.
+
+---
+
+# Benchmark
+
+NOVA includes a benchmark system.
+
+The benchmark tests different parts of the compiler and generated programs.
+
+Example benchmark categories include:
+
+* Hello world
+* Repeated printing
+* Long strings
+* Variables
+* Integer expressions
+* String + integer expressions
+* Function calls
+* `if / else`
+* Comparisons
+* Nested logic
+* Large programs
+
+The benchmark performs multiple runs and measures:
+
+```text
+Compile
+Runtime
+Total
+```
+
+The benchmark identifies itself as:
+
+```text
+========================================================================
+NOVA 1.1 BENCHMARK
+the children of the Nova project.
+Built by Netfloor Software Corporation
+========================================================================
+```
+
+---
+
+# Error Handling
+
+NOVA contains a dedicated error module.
+
+Compiler errors are reported when invalid NOVA syntax or unsupported operations are encountered.
+
+The compiler pipeline is designed to detect errors during lexical analysis, parsing, AST processing, and C compilation.
+
+---
+
+# Design Goals
+
+The main goals of NOVA are:
+
+1. Keep the language readable.
+2. Keep the syntax simple.
+3. Compile to native code.
+4. Make the compiler understandable.
+5. Support normal programming features.
+6. Remain independent from any specific operating system.
+7. Provide a foundation for future versions of NOVA.
+
+---
+
+# NOVA Is Not an OS
+
+NOVA is a **programming language and compiler project**.
+
+It is separate from operating-system projects and is not designed specifically for a particular OS.
+
+The compiler generates C code, which can then be compiled using a native C compiler such as GCC.
+
+---
+
+# Version
 
 Current version:
 
@@ -429,12 +646,66 @@ Current version:
 Nova 1.1
 ```
 
+Project slogan:
+
+```text
+the children of the Nova project.
+```
+
+Built by:
+
+```text
+Netfloor Software Corporation
+```
+
 ---
 
-## Project
+# Roadmap
 
-**NOVA**
+Possible future NOVA features include:
 
-**Built by Netfloor Software Corporation**
+* More built-in types
+* More standard library functionality
+* Better error messages
+* More advanced arrays
+* Additional file operations
+* More compiler optimizations
+* More benchmark tests
+* Improved generated C code
+* Cross-platform support
+* More control-flow features
+* Additional language features
 
-> Simple language. Native compiler pipeline. Built from scratch.
+---
+
+# Contributing
+
+NOVA is currently developed as the **Netfloor Software Corporation** project.
+
+The compiler architecture is intentionally divided into separate components so that the language can continue to grow:
+
+```text
+Lexer
+Parser
+AST
+Compiler
+Error system
+```
+
+---
+
+# License
+
+License information will be added in a future release.
+
+---
+
+# Credits
+
+## Netfloor Software Corporation
+
+**Nova 1.1**
+
+*the children of the Nova project.*
+
+**Built by Netfloor Software Corporation.**
