@@ -1,0 +1,26 @@
+entryp Main main
+
+program Main {
+    function main() {
+        print("Kérem az első számot: ");
+        set int xi = input();
+        
+        print("Kérem a második számot: ");
+        set int y = input();
+        
+        set int result = xi + y;
+        print("Az eredmény: ");
+        print(result);
+
+        
+        set file f = file.open("eredmeny.txt");
+        
+        
+        file.write(f, "A ket szam osszege: ");
+        
+        file.write(f, tostr(result));
+        file.close(f);
+        
+        print("\nAdatok sikeresen elmentve az eredmeny.txt-be!\n");
+    }
+}
